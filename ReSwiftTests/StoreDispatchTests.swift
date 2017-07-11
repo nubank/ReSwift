@@ -24,14 +24,33 @@ class StoreDispatchTests: XCTestCase {
     }
 
     /**
-     it throws an exception when a reducer dispatches an action
+     it accepts actions coming from multiple threads and handles them synchronously
      */
-    func testThrowsExceptionWhenReducersDispatch() {
-        // Expectation lives in the `DispatchingReducer` class
-        let reducer = DispatchingReducer()
-        store = Store(reducer: reducer.handleAction, state: TestAppState())
-        reducer.store = store
-        store.dispatch(SetValueAction(10))
+    func testDispatchInMultipleThreadsAreSynchronized() {
+        store.dispatch(SetValueAction(5))
+
+        let firstAction = DelayedAction(3)
+        let secondAction = DelayedAction(10)
+        dispatchAsync {
+            self.store.dispatch(firstAction)
+        }
+
+        dispatchAsync {
+            self.store.dispatch(secondAction)
+        }
+
+        XCTAssertFalse(secondAction.called)
+        waitFor { firstAction.called == true }
+
+        XCTAssertEqual(store.state.testValue, 5)
+        firstAction.unblock()
+
+        waitFor { store.state.testValue == 3 }
+
+        waitFor { secondAction.called == true }
+        secondAction.unblock()
+
+        waitFor { store.state.testValue == 10 }
     }
 
     /**
@@ -110,6 +129,17 @@ class StoreDispatchTests: XCTestCase {
                 XCTFail("waitForExpectationsWithTimeout errored: \(error)")
             }
         }
+    }
+
+    func waitFor(timeout: TimeInterval = 1,
+                 file: StaticString = #file,
+                 line: UInt = #line,
+                 block: () -> Bool) {
+        let maxTime = Date().addingTimeInterval(timeout).timeIntervalSince1970
+        while Date().timeIntervalSince1970 < maxTime {
+            if block() { return }
+        }
+        XCTFail("Timed out waiting for condition to be true", file: file, line: line)
     }
 }
 

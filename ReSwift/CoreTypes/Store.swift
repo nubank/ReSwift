@@ -32,13 +32,14 @@ open class Store<State: StateType>: StoreType {
         }
     }
 
+    ///The dispatch function to be used.
+    ///
+    ///Note: The default dispatch function runs alls reductions within a thread-safe synchronized block.
     public var dispatchFunction: DispatchFunction!
 
     private var reducer: Reducer<State>
 
     var subscriptions: [SubscriptionType] = []
-
-    private var isDispatching = false
 
     public required init(
         reducer: @escaping Reducer<State>,
@@ -109,20 +110,10 @@ open class Store<State: StateType>: StoreType {
 
     // swiftlint:disable:next identifier_name
     open func _defaultDispatch(action: Action) {
-        guard !isDispatching else {
-            raiseFatalError(
-                "ReSwift:ConcurrentMutationError- Action has been dispatched while" +
-                " a previous action is action is being processed. A reducer" +
-                " is dispatching an action, or ReSwift is used in a concurrent context" +
-                " (e.g. from multiple threads)."
-            )
-        }
-
-        isDispatching = true
+        objc_sync_enter(self)
         let newState = reducer(action, state)
-        isDispatching = false
-
         state = newState
+        objc_sync_exit(self)
     }
 
     open func dispatch(_ action: Action) {

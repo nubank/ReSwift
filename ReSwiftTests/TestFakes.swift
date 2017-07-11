@@ -59,6 +59,18 @@ struct SetValueAction: Action {
     }
 }
 
+class DelayedAction: Action {
+    var blocked: Bool = true
+    var called: Bool = false
+    let value: Int?
+
+    func unblock() { blocked = false }
+
+    init(_ value: Int) {
+        self.value = value
+    }
+}
+
 struct SetValueStringAction: Action {
 
     var value: String
@@ -85,6 +97,11 @@ struct TestReducer {
 
         switch action {
         case let action as SetValueAction:
+            state.testValue = action.value
+            return state
+        case let action as DelayedAction:
+            action.called = true
+            while action.blocked { RunLoop.main.run(until: Date()) }
             state.testValue = action.value
             return state
         default:
